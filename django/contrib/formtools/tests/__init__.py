@@ -17,10 +17,16 @@ warnings.filterwarnings('ignore', category=PendingDeprecationWarning,
 
 success_string = "Done was called!"
 
+
 class TestFormPreview(preview.FormPreview):
     def get_context(self, request, form):
         context = super(TestFormPreview, self).get_context(request, form)
         context.update({'custom_context': True})
+        return context
+
+    def get_context_data(self, **kwargs):
+        context = super(TestFormPreview, self).get_context_data(**kwargs)
+        context['more_custom_context'] = True
         return context
 
     def get_initial(self, request):
@@ -67,6 +73,7 @@ class PreviewTests(TestCase):
         stage = self.input % 1
         self.assertContains(response, stage, 1)
         self.assertEqual(response.context['custom_context'], True)
+        self.assertEqual(response.context['more_custom_context'], True)
         self.assertEqual(response.context['form'].initial, {'field1': 'Works!'})
 
     def test_form_preview(self):
@@ -85,6 +92,10 @@ class PreviewTests(TestCase):
         # Check to confirm stage is set to 2 in output form.
         stage = self.input % 2
         self.assertContains(response, stage, 1)
+
+        # Check that the correct context was passed to the template
+        self.assertEqual(response.context['custom_context'], True)
+        self.assertEqual(response.context['more_custom_context'], True)
 
     def test_form_submit(self):
         """
@@ -140,7 +151,6 @@ class PreviewTests(TestCase):
         response = self.client.post('/preview/', self.test_data)
         self.assertEqual(response.content, success_string)
 
-
     def test_form_submit_bad_hash(self):
         """
         Test contrib.formtools.preview form submittal does not proceed
@@ -154,7 +164,8 @@ class PreviewTests(TestCase):
         self.assertNotEqual(response.content, success_string)
         hash = utils.form_hmac(TestForm(self.test_data)) + "bad"
         self.test_data.update({'hash': hash})
-        response = self.client.post('/previewpreview/', self.test_data)
+        response = self.client.post('/preview/', self.test_data)
+        self.assertTemplateUsed(response, 'formtools/preview.html')
         self.assertNotEqual(response.content, success_string)
 
 
