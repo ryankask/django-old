@@ -73,7 +73,7 @@ class PreviewTests(TestCase):
         stage = self.input % 1
         self.assertContains(response, stage, 1)
         self.assertEqual(response.context['custom_context'], True)
-        self.assertEqual(response.context['more_custom_context'], True)
+        self.assertEqual(response.context['is_bound_form'], False)
         self.assertEqual(response.context['form'].initial, {'field1': 'Works!'})
 
     def test_form_preview(self):
@@ -95,7 +95,7 @@ class PreviewTests(TestCase):
 
         # Check that the correct context was passed to the template
         self.assertEqual(response.context['custom_context'], True)
-        self.assertEqual(response.context['more_custom_context'], True)
+        self.assertEqual(response.context['is_bound_form'], True)
 
     def test_form_submit(self):
         """
