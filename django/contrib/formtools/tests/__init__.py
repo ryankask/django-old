@@ -26,7 +26,7 @@ class TestFormPreview(preview.FormPreview):
 
     def get_context_data(self, **kwargs):
         context = super(TestFormPreview, self).get_context_data(**kwargs)
-        context['more_custom_context'] = True
+        context['is_bound_form'] = context['form'].is_bound
         return context
 
     def get_initial(self, request):
