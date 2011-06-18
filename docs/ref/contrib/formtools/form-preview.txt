@@ -17,7 +17,7 @@ Python class.
 Overview
 =========
 
-Given a :class:`django.forms.Form` subclass that you define, this
+Given a :class:`~django.forms.Form` subclass that you define, this
 application takes care of the following workflow:
 
    1. Displays the form as HTML on a Web page.
@@ -36,7 +36,7 @@ on the preview page, the form submission will fail the hash-comparison test.
 How to use ``FormPreview``
 ==========================
 
-    1. Point Django at the default FormPreview templates. There are two ways to
+    1. Point Django to the default FormPreview templates. There are two ways to
        do this:
 
             * Add ``'django.contrib.formtools'`` to your
@@ -89,33 +89,171 @@ How to use ``FormPreview``
 
 .. class:: FormPreview
 
-A :class:`~django.contrib.formtools.preview.FormPreview` class is a simple Python class
-that represents the preview workflow.
-:class:`~django.contrib.formtools.preview.FormPreview` classes must subclass
+.. versionchanged:: 1.4
+   :class:`~django.contrib.formtools.preview.FormPreview` is now based on
+   :doc:`generic class-based views </ref/class-based-views>`.
+
+:class:`~django.contrib.formtools.preview.FormPreview` is a subclass
+of the class-based generic :class:`~django.views.generic.edit.FormView` and
+implements the preview workflow described above. To use this workflow
+in your application, subclass
 ``django.contrib.formtools.preview.FormPreview`` and override the
-:meth:`~django.contrib.formtools.preview.FormPreview.done()` method. They can live
-anywhere in your codebase.
+:meth:`~django.contrib.formtools.preview.FormPreview.done()`
+method. In addition to the
+:meth:`~django.contrib.formtools.preview.FormPreview.done()` method,
+there are other helpful methods you might wish to override described
+below. The class should live in the application's ``views.py`` file.
 
 ``FormPreview`` templates
 =========================
 
-By default, the form is rendered via the template :file:`formtools/form.html`,
-and the preview page is rendered via the template :file:`formtools/preview.html`.
-These values can be overridden for a particular form preview by setting
-:attr:`~django.contrib.formtools.preview.FormPreview.preview_template` and
-:attr:`~django.contrib.formtools.preview.FormPreview.form_template` attributes on the
-FormPreview subclass. See :file:`django/contrib/formtools/templates` for the
-default templates.
+During the form preview process, two templates will be displayed:
+
+    1. The template specified by the attribute
+       :attr:`~django.contrib.foremtools.preview.FormPreview.form_template`,
+       displayed after the initial ``GET`` request. The default
+       template is :file:`formtools/form.html`.
+
+    2. The template specified by the attribute
+       :attr:`~django.contrib.formtools.preview.FormPreview.preview_template`,
+       used to display the preview page. The default template is
+       :file:`formtools/preview.html`.
+
+The template specified by
+:attr:`~django.contrib.formtools.preview.FormPreview.form_template` is
+passed ``stage_field`` in the context. This special field needs to
+be included in the template:
+
+.. code-block:: html+django
+
+    <form action="." method="post">{% csrf_token %}
+    <table>
+    {{ form }}
+    </table>
+    <input type="hidden" name="{{ stage_field }}" value="1" />
+    <input type="submit" value="Preview" />
+    </form>
+
+Note that the value of ``stage_field`` is set to ``1`` to indicate
+that this is the first time the data is being submitted and that the
+view should display a preview.
+
+The template specified by
+:attr:`~django.contrib.formtoolspreview.FormPreview.preview_template`
+is used to preview the user's form selection and provide a way to
+submit the form again. ``stage_field`` will be passed to the template
+and its value should be set to ``2``, telling the
+:class:`~django.contrib.formtools.preview.FormPreview` view that the
+form is being posted a second and final time and that the
+:meth:`~django.contrib.formtools.preview.FormPreview.done()` method
+should be called. Two items related to the security hash of the form
+are also passed to the template and must be submitted:
+
+    1. ``hash_field`` - The name to use for the ``<input>`` which
+       will store the calculated hash value of the
+       :class:`~django.forms.Form` instance.
+
+    2. ``hash_value`` - The actual value of the security hash.
+
+The ``<form>`` part of the preview template might look like:
+
+.. code-block:: html+django
+
+    <form action="" method="post">{% csrf_token %}
+    {% for field in form %}{{ field.as_hidden }}
+    {% endfor %}
+    <input type="hidden" name="{{ stage_field }}" value="2" />
+    <input type="hidden" name="{{ hash_field }}" value="{{ hash_value }}" />
+    <p><input type="submit" value="Submit" /></p>
+    </form>
+
+The above template will hide the form fields from the user although
+this isn't required.
+
+The values of ``stage_field`` and ``hash_field`` are guaranteed not to
+conflict with any of the field names of your
+:class:`~django.forms.Form`.
+
 
 Advanced ``FormPreview`` methods
 ================================
 
+:meth:`~done()` is the only method you are required to implement on
+your subclass of
+:class:`~django.contrib.formtools.preview.FormPreview`. Aside from
+the methods provided by the
+:class:`~django.views.generic.edit.FormView`, you can override a
+number of other methods to customize the form preview process.
+
+.. note::
+
+    Many of :class:`~django.contrib.formtools.preview.FormPreview`'s
+    methods take an :class:`~.django.http.HttpRequest` object as an
+    argument. This is to maintain backward compatibility with previous
+    versions of the class. Instances of
+    :class:`~django.contrib.formtools.preview.FormPreview`, like all
+    class-based generic views, have a ``request`` attribute containing
+    the current request.
+
+.. method:: FormPreview.get_auto_id()
+
+    Returns a value that is passed to the form as the ``auto_id``
+    keyword argument. See the :doc:`Forms API </ref/forms/api>` for
+    more information on ``auto_id.``. The default value is
+    ``formtools``.
+
+.. method:: FormPreview.get_initial(request)
+
+    Returns a dictionary that is passed to the form as ``initial``. The
+    default value is an empty dictionary. Note that unlike the
+    ``get_initial`` method on other class-based generic views, this
+    method takes an :class:`~.django.http.HttpRequest` object as an
+    argument. This is to maintain backwards compatibility with
+    previous versions of the method.
+
+.. method:: FormPreview.parse_params(*args, **kwargs)
+
+    Called prior to dispatching the ``get`` or ``post`` methods, allows
+    you to set attributes on the
+    :class:`~django.contrib.formtools.preview.FormPreview` in a
+    convenient way. It takes the captured ``args`` and ``kwargs`` from
+    the URLconf as arguments. For example, let's say you had the
+    following in your URLconf::
+
+        (r'^contact/(?P<user_id>\d+)/$', MyFormPreview(MyForm)),
+
+    You could do the following to save the user's ID for use when
+    :meth:`~django.contrib.formtools.preview.FormPreview.done()` is
+    called::
+
+        def parse_params(*args, **kwargs):
+            self.user_id = kwargs.get('user_id')
+
+    This method is empty by default.
+
 .. versionadded:: 1.2
 
-.. method:: FormPreview.process_preview
+.. method:: FormPreview.process_preview(request, form, context)
 
     Given a validated form, performs any extra processing before displaying the
     preview page, and saves any extra data in context.
 
     By default, this method is empty.  It is called after the form is validated,
     but before the context is modified with hash information and rendered.
+
+.. method:: FormPreview.security_hash(request, form)
+
+    Calculates the security hash for the given instances of the
+    :class:`~.django.http.HttpRequest` and :class:`~django.forms.Form`.
+
+    Subclasses may want to take into account request-specific information,
+    such as the IP address but this method is rarely overriden.
+
+    By default, this returns a generated SHA1 HMAC using the form
+    instance and your :setting:`SECRET_KEY`.
+
+.. method:: FormPreview.failed_hash(request)
+
+   Returns an :class:`~django.http.HttpResponse` when the security hash
+   check fails. By default this returns the user to the preview stage
+   of the process.
